@@ -1,23 +1,15 @@
+#
+# Copyright (C) 2016-2021 Lin Song <linsongui@gmail.com>
+#
+# This work is licensed under the Creative Commons Attribution-ShareAlike 3.0
+# Unported License: http://creativecommons.org/licenses/by-sa/3.0/
+#
+# Attribution required: please include my name in any derivative and let me
+# know how you have improved it!
+
 FROM debian:buster-slim
 
-ARG BUILD_DATE
-ARG VERSION
-ARG VCS_REF
-
-LABEL maintainer="Lin Song <linsongui@gmail.com>" \
-    org.opencontainers.image.created="$BUILD_DATE" \
-    org.opencontainers.image.version="$VERSION" \
-    org.opencontainers.image.revision="$VCS_REF" \
-    org.opencontainers.image.authors="Lin Song <linsongui@gmail.com>" \
-    org.opencontainers.image.title="IPsec VPN Server on Docker" \
-    org.opencontainers.image.description="Docker image to run an IPsec VPN server, with both IPsec/L2TP and Cisco IPsec." \
-    org.opencontainers.image.url="https://github.com/hwdsl2/docker-ipsec-vpn-server" \
-    org.opencontainers.image.source="https://github.com/hwdsl2/docker-ipsec-vpn-server" \
-    org.opencontainers.image.documentation="https://github.com/hwdsl2/docker-ipsec-vpn-server"
-
-ENV REFRESHED_AT 2020-05-19
-ENV SWAN_VER 3.32
-
+ENV SWAN_VER 4.4
 WORKDIR /opt/src
 
 RUN apt-get -yqq update \
@@ -25,7 +17,7 @@ RUN apt-get -yqq update \
        apt-get -yqq --no-install-recommends install \
          wget dnsutils openssl ca-certificates kmod iproute2 \
          gawk net-tools iptables bsdmainutils libcurl3-nss \
-         libnss3-tools libevent-dev xl2tpd \
+         libnss3-tools libevent-dev uuid-runtime xl2tpd \
          libnss3-dev libnspr4-dev pkg-config libpam0g-dev \
          libcap-ng-dev libcap-ng-utils libselinux1-dev \
          libcurl4-nss-dev flex bison gcc make \
@@ -34,10 +26,8 @@ RUN apt-get -yqq update \
     && tar xzf libreswan.tar.gz \
     && rm -f libreswan.tar.gz \
     && cd "libreswan-${SWAN_VER}" \
-    && printf 'WERROR_CFLAGS = -w\nUSE_DNSSEC = false\nUSE_DH31 = false\n' > Makefile.inc.local \
-    && printf 'USE_NSS_AVA_COPY = true\nUSE_NSS_IPSEC_PROFILE = false\n' >> Makefile.inc.local \
-    && printf 'USE_GLIBC_KERN_FLIP_HEADERS = true\nUSE_SYSTEMD_WATCHDOG = false\n' >> Makefile.inc.local \
-    && printf 'USE_DH2 = true\n' >> Makefile.inc.local \
+    && printf 'WERROR_CFLAGS=-w\nUSE_DNSSEC=false\nUSE_SYSTEMD_WATCHDOG=false\n' > Makefile.inc.local \
+    && printf 'USE_DH2=true\nUSE_NSS_KDF=false\nFINALNSSDIR=/etc/ipsec.d\n' >> Makefile.inc.local \
     && make -s base \
     && make -s install-base \
     && cd /opt/src \
@@ -51,9 +41,27 @@ RUN apt-get -yqq update \
     && rm -rf /var/lib/apt/lists/* \
     && update-alternatives --set iptables /usr/sbin/iptables-legacy
 
+RUN wget -t 3 -T 30 -nv -O /opt/src/ikev2.sh https://github.com/hwdsl2/setup-ipsec-vpn/raw/64eb0e1f49cf404a7883d92845d8035ab7ef33ea/extras/ikev2setup.sh \
+    && chmod +x /opt/src/ikev2.sh \
+    && ln -s /opt/src/ikev2.sh /usr/bin
+
 COPY ./run.sh /opt/src/run.sh
 RUN chmod 755 /opt/src/run.sh
-
 EXPOSE 500/udp 4500/udp
-
 CMD ["/opt/src/run.sh"]
+
+ARG BUILD_DATE
+ARG VERSION
+ARG VCS_REF
+ENV IMAGE_VER $BUILD_DATE
+
+LABEL maintainer="Lin Song <linsongui@gmail.com>" \
+    org.opencontainers.image.created="$BUILD_DATE" \
+    org.opencontainers.image.version="$VERSION" \
+    org.opencontainers.image.revision="$VCS_REF" \
+    org.opencontainers.image.authors="Lin Song <linsongui@gmail.com>" \
+    org.opencontainers.image.title="IPsec VPN Server on Docker" \
+    org.opencontainers.image.description="Docker image to run an IPsec VPN server, with both IPsec/L2TP and Cisco IPsec." \
+    org.opencontainers.image.url="https://github.com/hwdsl2/docker-ipsec-vpn-server" \
+    org.opencontainers.image.source="https://github.com/hwdsl2/docker-ipsec-vpn-server" \
+    org.opencontainers.image.documentation="https://github.com/hwdsl2/docker-ipsec-vpn-server"
